@@ -10,10 +10,7 @@ set(TEST_TARGET ${PROJECT_NAME}_test)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(SOURCES "src/SECS.cpp")
-set(HEADERS "src/SECS.hpp")
-
-add_library(${PROJECT_TARGET} STATIC ${SOURCES} ${HEADERS})
+add_subdirectory(src)
 
 if(BUILD_TEST)
   add_executable(${TEST_TARGET} "src/test.cpp")
