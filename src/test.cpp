@@ -9,13 +9,18 @@ struct Gamer : Component {
 };
 
 void main_startup(Commands cmd) {
-    const auto gamer = new Gamer("PewDiePie");
+    auto gamer = new Gamer("PewDiePie");
+    cmd.push(new Spawn(gamer));
+
+    gamer = new Gamer("Markiplier");
     cmd.push(new Spawn(gamer));
 
     std::cout << "HERE WE GO GAMERS" << std::endl;
 }
 
 void main_update(Query<All<Gamer>> query) {
+    std::cout << "---------" << std::endl;
+
     for (const auto& entity : query) {
         const auto& name = entity->expect<Gamer>()->name;
         std::cout << "GAMING!!! from " << name << std::endl;
