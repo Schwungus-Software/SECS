@@ -44,6 +44,11 @@ struct Entity {
     const std::shared_ptr<T> expect() const {
         return get<T>().lock();
     }
+
+    template <typename... Components>
+    const std::tuple<const std::shared_ptr<Components>...> tup() const {
+        return {expect<Components>()...};
+    }
 };
 
 struct SystemBase {
@@ -191,7 +196,7 @@ bool contains(const std::shared_ptr<Entity>& ent) {
 }
 
 template <typename... Components>
-Entities All(const Entities& input) {
+Entities With(const Entities& input) {
     Entities output;
 
     for (const auto& it : input) {

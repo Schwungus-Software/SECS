@@ -2,13 +2,17 @@
 
 #include "SECS.hpp"
 
+enum State : std::size_t {
+    GAMING,
+};
+
 struct Gamer : Component {
     std::string name;
 
     Gamer(const std::string name) : name(name) {}
 };
 
-void main_startup(Commands cmd) {
+void startup(Commands cmd) {
     auto gamer = new Gamer("PewDiePie");
     cmd.push(new Spawn(gamer));
 
@@ -18,7 +22,7 @@ void main_startup(Commands cmd) {
     std::cout << "HERE WE GO GAMERS" << std::endl;
 }
 
-void main_update(Query<All<Gamer>> query) {
+void game(Query<With<Gamer>> query) {
     std::cout << "---------" << std::endl;
 
     for (const auto& entity : query) {
@@ -28,10 +32,14 @@ void main_update(Query<All<Gamer>> query) {
 }
 
 const Systems SECS::systems{
-    {0, Stage::STARTUP, main_startup}, {0, Stage::UPDATE, main_update}};
+    {State::GAMING, Stage::STARTUP, startup},
+    {State::GAMING, Stage::UPDATE, game},
+};
 
-int main(int argc, char* argv[]) {
+int main(int, char**) {
     for (std::size_t i = 0; i < 10; i++) {
-        SECS::tick(0);
+        SECS::tick(State::GAMING);
     }
+
+    return 0;
 }
