@@ -128,6 +128,16 @@ struct Spawn : public Command {
     }
 };
 
+struct Delete : public Command {
+    std::shared_ptr<Entity> entity;
+
+    Delete(std::shared_ptr<Entity> entity) : Command(), entity(entity) {}
+
+    void perform() const override {
+        std::erase(SECS::entities, entity);
+    }
+};
+
 template <typename Comp>
 struct Insert : public Command {
     std::shared_ptr<Entity> entity;
@@ -138,6 +148,19 @@ struct Insert : public Command {
 
     void perform() const override {
         entity->components.insert(std::unique_ptr<Component>(component));
+    }
+};
+
+template <typename Comp>
+struct Remove : public Command {
+    std::shared_ptr<Entity> entity;
+
+    Remove(std::shared_ptr<Entity> entity) : Command(), entity(entity) {}
+
+    void perform() const override {
+        std::erase_if(entity->components, [this](const auto& other) {
+            return dynamic_cast<Comp*>(other.get()) != nullptr;
+        });
     }
 };
 

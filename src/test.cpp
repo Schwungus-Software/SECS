@@ -22,13 +22,29 @@ void startup(Commands cmd) {
     std::cout << "HERE WE GO GAMERS" << std::endl;
 }
 
-void game(Query<With<Gamer>> query) {
+static std::size_t counter = 1;
+
+void game(Commands cmd, Query<With<Gamer>> query) {
     std::cout << "---------" << std::endl;
 
     for (const auto& entity : query) {
         const auto& name = entity->expect<Gamer>()->name;
-        std::cout << "GAMING!!! from " << name << std::endl;
+        std::cout << "GAMING!!! from " << name;
+
+        if (counter == 5 && name == "Markiplier") {
+            std::cout << " - Aaaand he died";
+            cmd.push(new Delete(entity));
+        }
+
+        if (counter == 7 && name == "PewDiePie") {
+            std::cout << " - Aaaand he's stripped of his gamer title";
+            cmd.push(new Remove<Gamer>(entity));
+        }
+
+        std::cout << std::endl;
     }
+
+    counter++;
 }
 
 const Systems SECS::systems{
@@ -37,7 +53,7 @@ const Systems SECS::systems{
 };
 
 int main(int, char**) {
-    for (std::size_t i = 0; i < 10; i++) {
+    for (std::size_t i = 0; i < 12; i++) {
         SECS::tick(State::GAMING);
     }
 
