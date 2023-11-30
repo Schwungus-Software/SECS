@@ -2,6 +2,8 @@
 
 A **s**equential **E**ntity-**C**omponent-**S**ystem implementation in C++. Intended to be used with raylib, but can be easily used without. Though, not very usable in its current state regardless of your choice of libraries.
 
+See the [usage example](src/SECS_test.cpp) for a quick-start.
+
 **NOTE**: The docs below may get outdated really quickly since this is a rapidly evolving project.
 
 ## The Basics

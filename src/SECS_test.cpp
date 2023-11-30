@@ -6,10 +6,10 @@ enum State : std::size_t {
     GAMING,
 };
 
-struct Gamer : Component {
+struct Gamer : public Component {
     std::string name;
 
-    Gamer(const std::string name) : name(name) {}
+    Gamer(const std::string& name) : name(name) {}
 };
 
 void startup(Commands cmd) {
