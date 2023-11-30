@@ -184,11 +184,11 @@ struct Commands {
 
 using Filter = Entities (*const)(const Entities&);
 
-inline Entities Pass(const Entities& input) {
+inline Entities All(const Entities& input) {
     return input;
 }
 
-template <Filter Has = Pass>
+template <Filter Has = All>
 struct Query {
     Entities results;
 
