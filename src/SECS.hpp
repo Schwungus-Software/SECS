@@ -173,6 +173,25 @@ struct Commands {
         queue.push_back(std::unique_ptr<Command>(cmd));
     }
 
+    template <typename Component>
+    void insert(std::shared_ptr<Entity> target, Component* component) {
+        push(new Insert(target, component));
+    }
+
+    template <typename Component>
+    void remove(std::shared_ptr<Entity> target) {
+        push(new Remove<Component>(target));
+    }
+
+    template <typename... Components>
+    void spawn(Components*... components) {
+        push(new Spawn<Components...>(components...));
+    }
+
+    void del(std::shared_ptr<Entity> entity) {
+        push(new Delete(entity));
+    }
+
     ~Commands() {
         for (auto& command : queue) {
             SECS::cmd_queue.push_back(std::move(command));

@@ -14,10 +14,10 @@ struct Gamer : public Component {
 
 void startup(Commands cmd) {
     auto gamer = new Gamer("PewDiePie");
-    cmd.push(new Spawn(gamer));
+    cmd.spawn(gamer);
 
     gamer = new Gamer("Markiplier");
-    cmd.push(new Spawn(gamer));
+    cmd.spawn(gamer);
 
     std::cout << "HERE WE GO GAMERS" << std::endl;
 }
@@ -33,12 +33,12 @@ void game(Commands cmd, Query<With<Gamer>> query) {
 
         if (counter == 5 && name == "Markiplier") {
             std::cout << " - Aaaand he died";
-            cmd.push(new Delete(entity));
+            cmd.del(entity);
         }
 
         if (counter == 7 && name == "PewDiePie") {
             std::cout << " - Aaaand he's stripped of his gamer title";
-            cmd.push(new Remove<Gamer>(entity));
+            cmd.remove<Gamer>(entity);
         }
 
         std::cout << std::endl;
