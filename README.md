@@ -16,7 +16,7 @@ This library was heavily inspired by the [Bevy game engine](https://github.com/b
 
 For each new SECS project:
 
-- Include the `SECS.h` header wherever required.
+- Include the `SECS.hpp` header wherever required.
 - Define `const Systems SECS::systems` once, e.g. in your `main.cpp` file.
 - Populate it with systems using an initializer list.
 - Call `SECS::tick(...)` every in-game tick.
