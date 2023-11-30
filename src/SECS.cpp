@@ -8,8 +8,12 @@ CommandQueue SECS::cmd_queue;
 
 void SECS::tick(std::size_t state_idx) {
     for (const auto& sys : systems) {
-        const auto can_startup = prev_state_idx != sys->state_idx;
-        const auto can_update = prev_state_idx == sys->state_idx;
+        if (sys->state_idx != state_idx) {
+            continue;
+        }
+
+        const auto can_startup = prev_state_idx != state_idx;
+        const auto can_update = prev_state_idx == state_idx;
 
         const auto tick_startup = sys->stage == Stage::STARTUP && can_startup;
         const auto tick_update = sys->stage == Stage::UPDATE && can_update;
