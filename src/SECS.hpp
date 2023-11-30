@@ -3,94 +3,204 @@
 #include <concepts>
 #include <functional>
 #include <initializer_list>
-#include <iostream>
 #include <memory>
 #include <set>
-#include <tuple>
-#include <variant>
 
 enum class Stage {
-    ENTER,
+    STARTUP,
     UPDATE,
 };
 
-struct ID {
-    // Placeholder for entity IDs.
+struct Entity;
+struct Command;
+
+struct Component {
+    Component() = default;
+    virtual ~Component() = default;
 };
 
-template <typename GS>
-struct SECS;
+using Entities = std::vector<std::shared_ptr<Entity>>;
+using ComponentSet = std::set<std::shared_ptr<Component>>;
+using CommandQueue = std::vector<std::unique_ptr<Command>>;
 
-template <typename GS, typename T>
-concept SystemParam = requires(SECS<GS>& ctx) { T(ctx); };
+struct Entity {
+    ComponentSet components;
 
-template <typename GS>
+    Entity() = default;
+    ~Entity() = default;
+
+    template <typename T>
+    const std::weak_ptr<T> get() const {
+        for (const auto& ptr : components) {
+            if (dynamic_cast<T*>(ptr.get()) != nullptr) {
+                return std::static_pointer_cast<T>(ptr);
+            }
+        }
+
+        return std::weak_ptr<T>();
+    }
+
+    template <typename T>
+    const std::shared_ptr<T> expect() const {
+        return get<T>().lock();
+    }
+};
+
 struct SystemBase {
-    const GS state;
+    const std::size_t state_idx;
     const Stage stage;
 
-    SystemBase(const GS state, const Stage stage)
-        : state(state), stage(stage) {}
+    SystemBase(const std::size_t state_idx, const Stage stage)
+        : state_idx(state_idx), stage(stage) {}
 
-    virtual void tick(SECS<GS>&) = 0;
     virtual ~SystemBase() = default;
+
+    virtual void tick() = 0;
 };
 
-template <typename GS, SystemParam<GS>... Params>
-struct SystemDef : public SystemBase<GS> {
+template <typename... Params>
+struct SystemDef : public SystemBase {
     using Fn = void (*)(Params...);
 
     const Fn functor;
 
-    SystemDef(const GS state, const Stage stage, const Fn functor)
-        : SystemBase<GS>(state, stage), functor(functor) {}
+    SystemDef(const std::size_t state_idx, const Stage stage, const Fn functor)
+        : SystemBase(state_idx, stage), functor(functor) {}
 
-    void tick(SECS<GS>& ctx) override {
-        functor(Params(ctx)...);
+    void tick() override {
+        functor(Params()...);
     }
 };
 
-template <typename GS>
 struct AnySystem {
-    const std::shared_ptr<SystemBase<GS>> inner;
+    const std::shared_ptr<SystemBase> inner;
 
-    template <SystemParam<GS>... Params>
+    template <typename... Params>
     AnySystem(
-        const GS state, const Stage stage, void (*const functor)(Params...)
+        const std::size_t state_idx, const Stage stage,
+        void (*const functor)(Params...)
     )
-        : inner(new SystemDef<GS, Params...>(state, stage, functor)) {}
+        : inner(new SystemDef<Params...>(state_idx, stage, functor)) {}
 
-    void tick(SECS<GS>& ctx) const {
-        inner->tick(ctx);
+    void tick() const {
+        inner->tick();
+    }
+
+    const std::shared_ptr<SystemBase> operator->() const {
+        return inner;
     }
 };
 
-template <typename GS>
-struct SECS {
-    const std::vector<AnySystem<GS>> systems;
+using Systems = std::vector<AnySystem>;
 
-    GS prev_state;
-    bool just_started;
+struct Command {
+    Command() = default;
+    virtual ~Command() = default;
 
-    SECS(GS init_state, const std::initializer_list<AnySystem<GS>>&& systems)
-        : systems(systems), prev_state(init_state), just_started(true) {}
+    virtual void perform() const = 0;
+};
 
-    void tick(GS state) {
-        for (const auto& any_sys : systems) {
-            const auto& sys = any_sys.inner;
+namespace SECS {
+    extern const Systems systems;
+    extern Entities entities;
+    extern CommandQueue cmd_queue;
 
-            const auto can_enter = just_started || state != prev_state;
-            const auto can_tick = state == prev_state;
+    extern std::size_t prev_state_idx;
 
-            const auto trigger_enter = sys->stage == Stage::ENTER && can_enter;
-            const auto trigger_tick = sys->stage == Stage::UPDATE && can_tick;
+    void tick(std::size_t);
+}; // namespace SECS
 
-            if (trigger_enter || trigger_tick) {
-                sys->tick(*this);
-            }
+template <typename... Components>
+struct Spawn : public Command {
+    std::shared_ptr<Entity> entity;
+
+    Spawn(Components*... args) : Command(), entity(std::make_shared<Entity>()) {
+        entity->components = {std::shared_ptr<Components>(args)...};
+    }
+
+    void perform() const override {
+        SECS::entities.push_back(entity);
+    }
+};
+
+template <typename Comp>
+struct Insert : public Command {
+    std::shared_ptr<Entity> entity;
+    Comp* component;
+
+    Insert(std::shared_ptr<Entity> entity, Comp* component)
+        : Command(), entity(entity), component(component) {}
+
+    void perform() const override {
+        entity->components.insert(std::unique_ptr<Component>(component));
+    }
+};
+
+struct Commands {
+    std::vector<std::unique_ptr<Command>> queue;
+
+    Commands() {}
+
+    void push(Command* cmd) {
+        queue.push_back(std::unique_ptr<Command>(cmd));
+    }
+
+    ~Commands() {
+        for (auto& command : queue) {
+            SECS::cmd_queue.push_back(std::move(command));
         }
 
-        prev_state = state;
-        just_started = false;
+        queue.clear();
     }
 };
+
+using Filter = Entities (*const)(const Entities&);
+
+inline Entities Pass(const Entities& input) {
+    return input;
+}
+
+template <Filter Has = Pass>
+struct Query {
+    Entities results;
+
+    Query() {
+        results = Has(SECS::entities);
+    }
+
+    ~Query() {}
+
+    Entities::iterator begin() {
+        return results.begin();
+    }
+
+    Entities::iterator end() {
+        return results.end();
+    }
+};
+
+template <typename T>
+bool contains(const std::shared_ptr<Entity>& ent) {
+    for (const auto& comp : ent->components) {
+        if (dynamic_cast<T*>(comp.get()) != nullptr) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+template <typename... Components>
+Entities All(const Entities& input) {
+    Entities output;
+
+    for (const auto& it : input) {
+        const auto contains_all = (contains<Components>(it) && ...);
+
+        if (contains_all) {
+            output.push_back(it);
+        }
+    }
+
+    return output;
+}
