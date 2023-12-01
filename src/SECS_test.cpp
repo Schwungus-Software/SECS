@@ -3,7 +3,7 @@
 #include "SECS.hpp"
 
 enum State : std::size_t {
-    GAMING,
+    GAMING = 0,
 };
 
 struct Gamer : public Component {

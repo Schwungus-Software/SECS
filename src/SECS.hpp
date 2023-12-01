@@ -65,11 +65,11 @@ struct SystemBase {
 
 template <typename... Params>
 struct SystemDef : public SystemBase {
-    using Fn = void (*)(Params...);
+    using Fn = void (*const)(Params...);
 
     const Fn functor;
 
-    SystemDef(const std::size_t state_idx, const Stage stage, const Fn functor)
+    SystemDef(const std::size_t state_idx, const Stage stage, Fn functor)
         : SystemBase(state_idx, stage), functor(functor) {}
 
     void tick() override {
@@ -86,6 +86,10 @@ struct AnySystem {
         void (*const functor)(Params...)
     )
         : inner(new SystemDef<Params...>(state_idx, stage, functor)) {}
+
+    template <typename... Params>
+    AnySystem(const SystemDef<Params...>& def)
+        : AnySystem(def.state_idx, def.stage, def.functor) {}
 
     void tick() const {
         inner->tick();
