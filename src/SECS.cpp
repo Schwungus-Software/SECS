@@ -1,12 +1,12 @@
 #include "SECS.hpp"
 
-// TODO: replace with the max value for `std::size_t`.
-std::size_t SECS::prev_state_idx = 1 << 16;
-
 Entities SECS::entities;
 CommandQueue SECS::cmd_queue;
 
 void SECS::tick(std::size_t state_idx) {
+    // TODO: replace with the max value for `std::size_t`.
+    static std::size_t prev_state_idx = 1 << 16;
+
     for (const auto& sys : systems) {
         if (sys->state_idx != state_idx) {
             continue;

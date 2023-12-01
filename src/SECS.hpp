@@ -114,8 +114,6 @@ namespace SECS {
     extern Entities entities;
     extern CommandQueue cmd_queue;
 
-    extern std::size_t prev_state_idx;
-
     void tick(std::size_t);
 }; // namespace SECS
 
