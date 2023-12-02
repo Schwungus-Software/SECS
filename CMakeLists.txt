@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
-project(SECS CXX)
+project(
+  SECS
+  VERSION 0.1.0
+  DESCRIPTION "A sequential ECS library"
+  LANGUAGES CXX)
 
 option(SECS_BUILD_TEST "Include the test application in the build?" ON)
 
