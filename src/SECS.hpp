@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include <memory>
 #include <set>
+#include <vector>
 
 enum class Stage {
     STARTUP,
