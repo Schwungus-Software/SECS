@@ -4,8 +4,6 @@ A **s**equential **E**ntity-**C**omponent-**S**ystem implementation in C++. Inte
 
 See the [usage example](src/SECS_test.cpp) for a quick-start.
 
-If you decide to use this in your project, make sure to clone the `barely-usable` branch. Don't ask why I called it that. (Though, it should be pretty obvious.)
-
 **NOTE**: The docs below may get outdated really quickly since this is a rapidly evolving project.
 
 ## The Basics
