@@ -1,6 +1,6 @@
 #include "SECS.hpp"
 
-Entities SECS::entities;
+std::vector<std::shared_ptr<Entity>> SECS::entities;
 CommandQueue SECS::cmd_queue;
 
 void SECS::tick(std::size_t state_idx) {

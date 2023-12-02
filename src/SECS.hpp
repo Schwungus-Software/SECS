@@ -12,6 +12,7 @@ enum class Stage {
 };
 
 struct Entity;
+struct ID;
 struct Command;
 
 struct Component {
@@ -19,7 +20,7 @@ struct Component {
     virtual ~Component() = default;
 };
 
-using Entities = std::vector<std::shared_ptr<Entity>>;
+using Entities = std::vector<ID>;
 using ComponentSet = std::set<std::shared_ptr<Component>>;
 using CommandQueue = std::vector<std::unique_ptr<Command>>;
 
@@ -48,6 +49,52 @@ struct Entity {
     template <typename... Components>
     const std::tuple<const std::shared_ptr<Components>...> tup() const {
         return {expect<Components>()...};
+    }
+};
+
+struct ID {
+  private:
+    std::weak_ptr<Entity> ptr;
+
+  public:
+    ID(const ID& id) : ptr(id.ptr) {}
+    ID(const std::shared_ptr<Entity>& ptr) : ptr(ptr) {}
+    ~ID() = default;
+
+    void operator=(const std::shared_ptr<Entity>& ptr) const {
+        *this = ID(ptr);
+    }
+
+    void operator=(const ID& id) const {
+        *this = ID(id);
+    }
+
+    bool valid() const {
+        return !ptr.expired();
+    }
+
+    Entity& operator*() {
+        return *ptr.lock();
+    }
+
+    const Entity& operator*() const {
+        return *ptr.lock();
+    }
+
+    const std::shared_ptr<Entity> operator->() const {
+        return ptr.lock();
+    }
+
+    bool operator==(const ID& other) const {
+        if (valid() && other.valid()) {
+            return ptr.lock() == other.ptr.lock();
+        } else {
+            return valid() == other.valid();
+        }
+    }
+
+    bool operator==(const std::shared_ptr<Entity>& other) const {
+        return *this == const_cast<const ID&&>(ID(other));
     }
 };
 
@@ -110,8 +157,8 @@ struct Command {
 };
 
 namespace SECS {
-    extern const Systems systems;
-    extern Entities entities;
+    extern const Systems systems; // user-defined
+    extern std::vector<std::shared_ptr<Entity>> entities;
     extern CommandQueue cmd_queue;
 
     void tick(std::size_t);
@@ -131,35 +178,47 @@ struct Spawn : public Command {
 };
 
 struct Delete : public Command {
-    std::shared_ptr<Entity> entity;
+    ID entity;
 
-    Delete(std::shared_ptr<Entity> entity) : Command(), entity(entity) {}
+    Delete(ID entity) : Command(), entity(entity) {}
 
     void perform() const override {
-        std::erase(SECS::entities, entity);
+        if (!entity.valid()) {
+            return;
+        }
+
+        std::erase_if(SECS::entities, [this](const auto& other) {
+            return entity == other;
+        });
     }
 };
 
 template <typename Comp>
 struct Insert : public Command {
-    std::shared_ptr<Entity> entity;
+    ID entity;
     Comp* component;
 
-    Insert(std::shared_ptr<Entity> entity, Comp* component)
+    Insert(ID entity, Comp* component)
         : Command(), entity(entity), component(component) {}
 
     void perform() const override {
-        entity->components.insert(std::unique_ptr<Component>(component));
+        if (entity.valid()) {
+            entity->components.insert(std::unique_ptr<Component>(component));
+        }
     }
 };
 
 template <typename Comp>
 struct Remove : public Command {
-    std::shared_ptr<Entity> entity;
+    ID entity;
 
-    Remove(std::shared_ptr<Entity> entity) : Command(), entity(entity) {}
+    Remove(ID entity) : Command(), entity(entity) {}
 
     void perform() const override {
+        if (!entity.valid()) {
+            return;
+        }
+
         std::erase_if(entity->components, [this](const auto& other) {
             return dynamic_cast<Comp*>(other.get()) != nullptr;
         });
@@ -176,12 +235,12 @@ struct Commands {
     }
 
     template <typename Component>
-    void insert(std::shared_ptr<Entity> target, Component* component) {
+    void insert(ID target, Component* component) {
         push(new Insert(target, component));
     }
 
     template <typename Component>
-    void remove(std::shared_ptr<Entity> target) {
+    void remove(ID target) {
         push(new Remove<Component>(target));
     }
 
@@ -190,7 +249,7 @@ struct Commands {
         push(new Spawn<Components...>(components...));
     }
 
-    void del(std::shared_ptr<Entity> entity) {
+    void del(ID entity) {
         push(new Delete(entity));
     }
 
@@ -214,7 +273,13 @@ struct Query {
     Entities results;
 
     Query() {
-        results = Has(SECS::entities);
+        Entities ids;
+
+        for (const auto& entity : SECS::entities) {
+            ids.push_back(entity);
+        }
+
+        results = Has(ids);
     }
 
     ~Query() {}
@@ -229,7 +294,11 @@ struct Query {
 };
 
 template <typename T>
-bool contains(const std::shared_ptr<Entity>& ent) {
+bool contains(const ID& ent) {
+    if (!ent.valid()) {
+        return false;
+    }
+
     for (const auto& comp : ent->components) {
         if (dynamic_cast<T*>(comp.get()) != nullptr) {
             return true;
