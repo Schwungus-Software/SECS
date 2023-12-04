@@ -62,14 +62,6 @@ struct ID {
     ID(const std::shared_ptr<Entity>& ptr) : ptr(ptr) {}
     ~ID() = default;
 
-    void operator=(const std::shared_ptr<Entity>& ptr) const {
-        *this = ID(ptr);
-    }
-
-    void operator=(const ID& id) const {
-        *this = ID(id);
-    }
-
     bool valid() const {
         return !ptr.expired();
     }
