@@ -3,27 +3,118 @@
 #include <concepts>
 #include <functional>
 #include <initializer_list>
+#include <iostream>
 #include <memory>
 #include <set>
 #include <vector>
 
-enum class Stage {
-    STARTUP,
-    UPDATE,
+// Forward declarations.
+
+template <typename T>
+concept SystemParam = requires() { T(); };
+
+struct State;
+struct Stage;
+struct SystemBase;
+struct Command;
+struct Entity;
+struct Component;
+struct ID;
+struct System;
+struct ExecutionContext;
+struct SystemBuilder;
+
+template <SystemParam... Params>
+struct SystemDef;
+
+using Systems = std::vector<std::unique_ptr<SystemBase>>;
+
+using Entities = std::vector<ID>;
+using ComponentSet = std::set<std::shared_ptr<Component>>;
+using CommandQueue = std::vector<std::shared_ptr<Command>>;
+
+using Filter = Entities (*const)(const Entities&);
+
+// The main namespace.
+
+namespace SECS {
+    extern Systems systems;
+    extern std::vector<std::shared_ptr<Entity>> entities;
+    extern CommandQueue cmd_queue;
+    extern ExecutionContext exec_context;
+    extern const Stage Enter, Update;
+
+    void tick(State);
+    SystemBuilder add(System);
+}; // namespace SECS
+
+// Definitions.
+
+struct Stage {
+  private:
+    std::size_t id;
+
+  public:
+    Stage(std::size_t id) : id(id) {}
+
+    bool operator==(const Stage& another) const {
+        return id == another.id;
+    }
+
+    // Needed for `std::set` operations to work.
+    bool operator<(const Stage& another) const {
+        return id < another.id;
+    }
 };
 
-struct Entity;
-struct ID;
-struct Command;
+struct State {
+  private:
+    std::size_t id;
+
+  public:
+    State() {
+        static std::size_t last_id = 0;
+        id = last_id++;
+    }
+
+    bool operator==(const State& another) const {
+        return id == another.id;
+    }
+
+    // Needed for `std::set` operations to work.
+    bool operator<(const State& another) const {
+        return id < another.id;
+    }
+};
+
+struct ExecutionContext {
+    Stage stage;
+    State state;
+};
+
+template <typename T>
+struct Param {
+    Param() = delete;
+};
+
+template <>
+struct Param<Stage> {
+    Stage value;
+
+    Param() : value(SECS::exec_context.stage) {}
+};
+
+template <>
+struct Param<State> {
+    State value;
+
+    Param() : value(SECS::exec_context.state) {}
+};
 
 struct Component {
     Component() = default;
     virtual ~Component() = default;
 };
-
-using Entities = std::vector<ID>;
-using ComponentSet = std::set<std::shared_ptr<Component>>;
-using CommandQueue = std::vector<std::unique_ptr<Command>>;
 
 struct Entity {
     ComponentSet components;
@@ -92,47 +183,47 @@ struct ID {
 };
 
 struct SystemBase {
-    const std::size_t state_idx;
-    const Stage stage;
-
-    SystemBase(const std::size_t state_idx, const Stage stage)
-        : state_idx(state_idx), stage(stage) {}
-
+    SystemBase() = default;
     virtual ~SystemBase() = default;
 
     virtual void tick() = 0;
+
+    virtual SystemBase& on(const Stage&) = 0;
+    virtual SystemBase& on(const State&) = 0;
+
+  protected:
+    virtual std::unique_ptr<SystemBase> build() = 0;
+    friend SystemBuilder;
 };
 
-template <typename... Params>
-struct SystemDef : public SystemBase {
-    using Fn = void (*const)(Params...);
-
-    const Fn functor;
-
-    SystemDef(const std::size_t state_idx, const Stage stage, Fn functor)
-        : SystemBase(state_idx, stage), functor(functor) {}
-
-    void tick() override {
-        functor(Params()...);
-    }
-};
-
-struct AnySystem {
+struct System : SystemBase {
     const std::shared_ptr<SystemBase> inner;
 
     template <typename... Params>
-    AnySystem(
-        const std::size_t state_idx, const Stage stage,
-        void (*const functor)(Params...)
-    )
-        : inner(new SystemDef<Params...>(state_idx, stage, functor)) {}
+    System(SystemDef<Params...> def) : System(def.functor) {}
 
     template <typename... Params>
-    AnySystem(const SystemDef<Params...>& def)
-        : AnySystem(def.state_idx, def.stage, def.functor) {}
+    System(void (*functor)(Params...))
+        : inner(std::make_shared<SystemDef<Params...>>(functor)) {}
 
-    void tick() const {
+    template <typename... Params>
+    System(std::function<void(Params...)> functor)
+        : inner(std::make_shared<SystemDef<Params...>>(functor)) {}
+
+    std::unique_ptr<SystemBase> build() override {
+        return std::unique_ptr<SystemBase>(new System(*this));
+    }
+
+    void tick() override {
         inner->tick();
+    }
+
+    SystemBase& on(const Stage& stage) override {
+        return inner->on(stage);
+    }
+
+    SystemBase& on(const State& state) override {
+        return inner->on(state);
     }
 
     const std::shared_ptr<SystemBase> operator->() const {
@@ -140,7 +231,44 @@ struct AnySystem {
     }
 };
 
-using Systems = std::vector<AnySystem>;
+template <SystemParam... Params>
+struct SystemDef : public SystemBase {
+    using Fn = std::function<void(Params...)>;
+
+    const Fn functor;
+
+    std::set<Stage> allowed_stages;
+    std::set<State> allowed_states;
+
+    SystemDef(Fn functor) : SystemBase(), functor(functor) {}
+    SystemDef(void (*functor)(Params...)) : SystemBase(), functor(functor) {}
+
+    std::unique_ptr<SystemBase> build() override {
+        return std::unique_ptr<SystemBase>(new SystemDef<Params...>(*this));
+    }
+
+    void tick() override {
+        const auto allowed_stage =
+            allowed_stages.contains(SECS::exec_context.stage);
+
+        const auto allowed_state =
+            allowed_states.contains(SECS::exec_context.state);
+
+        if (allowed_stage && allowed_state) {
+            functor(Params()...);
+        }
+    }
+
+    SystemBase& on(const Stage& stage) override {
+        allowed_stages.insert(stage);
+        return *this;
+    }
+
+    SystemBase& on(const State& state) override {
+        allowed_states.insert(state);
+        return *this;
+    }
+};
 
 struct Command {
     Command() = default;
@@ -148,14 +276,6 @@ struct Command {
 
     virtual void perform() const = 0;
 };
-
-namespace SECS {
-    extern const Systems systems; // user-defined
-    extern std::vector<std::shared_ptr<Entity>> entities;
-    extern CommandQueue cmd_queue;
-
-    void tick(std::size_t);
-}; // namespace SECS
 
 template <typename... Components>
 struct Spawn : public Command {
@@ -219,12 +339,12 @@ struct Remove : public Command {
 };
 
 struct Commands {
-    std::vector<std::unique_ptr<Command>> queue;
+    CommandQueue queue;
 
     Commands() {}
 
     void push(Command* cmd) {
-        queue.push_back(std::unique_ptr<Command>(cmd));
+        queue.push_back(std::shared_ptr<Command>(cmd));
     }
 
     template <typename Component>
@@ -254,8 +374,6 @@ struct Commands {
         queue.clear();
     }
 };
-
-using Filter = Entities (*const)(const Entities&);
 
 inline Entities All(const Entities& input) {
     return input;
@@ -315,3 +433,26 @@ Entities With(const Entities& input) {
 
     return output;
 }
+
+struct SystemBuilder {
+    System sys;
+
+  private:
+    SystemBuilder(System sys) : sys(sys) {}
+    friend SystemBuilder SECS::add(System sys);
+
+  public:
+    SystemBuilder& on(const Stage& stage) {
+        sys.on(stage);
+        return *this;
+    }
+
+    SystemBuilder& on(const State& state) {
+        sys.on(state);
+        return *this;
+    }
+
+    ~SystemBuilder() {
+        SECS::systems.push_back(sys.build());
+    }
+};

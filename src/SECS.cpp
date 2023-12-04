@@ -1,28 +1,24 @@
 #include "SECS.hpp"
 
+Systems SECS::systems;
 std::vector<std::shared_ptr<Entity>> SECS::entities;
+
+const Stage SECS::Enter(0), SECS::Update(1);
+
 CommandQueue SECS::cmd_queue;
 
-void SECS::tick(std::size_t state_idx) {
-    // TODO: replace with the max value for `std::size_t`.
-    static std::size_t prev_state_idx = 1 << 16;
+ExecutionContext SECS::exec_context{
+    .stage = SECS::Enter,
+    .state = State{},
+};
+
+void SECS::tick(State state) {
+    exec_context.stage =
+        exec_context.state == state ? SECS::Update : SECS::Enter;
+    exec_context.state = state;
 
     for (const auto& sys : systems) {
-        if (sys->state_idx != state_idx) {
-            continue;
-        }
-
-        const auto can_startup = prev_state_idx != state_idx;
-        const auto can_update = prev_state_idx == state_idx;
-
-        const auto tick_startup = sys->stage == Stage::STARTUP && can_startup;
-        const auto tick_update = sys->stage == Stage::UPDATE && can_update;
-
-        const auto tick = tick_startup || tick_update;
-
-        if (tick) {
-            sys->tick();
-        }
+        sys->tick();
     }
 
     for (const auto& command : cmd_queue) {
@@ -30,6 +26,8 @@ void SECS::tick(std::size_t state_idx) {
     }
 
     cmd_queue.clear();
+}
 
-    prev_state_idx = state_idx;
+SystemBuilder SECS::add(System system) {
+    return SystemBuilder(system);
 }
