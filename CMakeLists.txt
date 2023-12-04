@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
 project(
   SECS
-  VERSION 0.1.1
+  VERSION 0.1.2
   DESCRIPTION "A sequential ECS library"
   LANGUAGES CXX)
 
